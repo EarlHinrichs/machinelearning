@@ -5,18 +5,253 @@ date: "December 21, 2015"
 output: html_document
 ---
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r ref.label="setup", echo=FALSE, warning=FALSE}
+```
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+## Executive Summary
+
+The goal of this project is to predict whether a participant performed an exercise in the correctly, or if not, which common flaw was detected.
+
+The data comes from <http://groupware.les.inf.puc-rio.br/har>. It is kindly provided under the Creative Commons license (CC BY-SA). The original study is from Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. [Qualitative Activity Recognition of Weight Lifting Exercises] <http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201>. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+The data consists of a number of observations from sensors positioned on the participants, and a classe variable describing the quality of the exercise, either correct (A) or one of four common flaws (B,C,D,E).
+
+For the course project, the data has been split into separate training and test sets at <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv> and <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>. The classe column has been removed from the testing set. We are to build a model from the training set data and use it to predict the missing column in the test set.
+
+
+## Exploratory Data Analysis
+
+Load the data.
 
 ```{r}
-summary(cars)
+trainRaw <- getTrainData()
+testRaw <- getTestData()
 ```
 
-You can also embed plots, for example:
+The dataset consists of two types of rows, time snapshots rows, and summary rows. The details can be found in the above referenced paper. The key take-away is that the different rows should not be mixed in our analysis. The different row types can be distinguished with the "new_window" variable. Fortunately, our test test set consists only of snapshot type rows. So we are going to discard the summary rows in the training dataset.
 
-```{r, echo=FALSE}
-plot(cars)
+```{r}
+goodRows <- trainRaw$new_window == "no"
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Many of the columns were used only for the summary rows. These columns have blanks or NA for all the non-summary rows. Let's remove them. There are also few columns at the head of the dataset that are used to describe the sample conditions (time, participant, etc.). Let's remove those as well.
+
+
+```{r}
+goodColumns <- colSums(is.na(trainRaw)) == 0
+goodColumns <- goodColumns & ! colnames(trainRaw) %in% c("X", "user_name", "raw_timestamp_part_1", "cvtd_timestamp", "new_window")
+```
+
+
+```{r}
+trainCooked = trainRaw[goodRows,goodColumns]
+testCooked = testRaw[,goodColumns]
+```
+
+The raw training data has `r nrow(trainRaw)` rows and `r ncol(trainRaw)` columns. After cooking, the training data has `r nrow(trainCooked)` rows and `r ncol(trainCooked)` columns. The test data has been reduced to `r ncol(testCooked)` columns.
+
+
+
+```{r ref.label="trainAndTest", echo=FALSE, warning=FALSE}
+```
+
+### Model 1
+
+```{r warning=FALSE, cache=TRUE}
+TrainAndTest(0.01)
+finalAnswer <- answer
+result <- result
+
+```
+
+
+`r printIt(result)`
+
+`r finalAnswer`
+
+yo! `r 1+1` `r result$confusion2`
+
+
+#HACK
+
+```{r}
+
+```
+
+
+
+```{r trainAndTest }
+checkAnswer <- function(n) {
+    trainRaw[trainRaw$num_window==n,"classe"][1]
+}
+answers <- sapply(testCooked[,"num_window"],FUN=checkAnswer)
+
+printIt <- function( x = result ) {
+    sprintf( "p=%0.2f, m=%5s, time=%3.0fs, acc1=%0.2f, acc2=%0.2f, pp=%i, tc=%s-%i, predictors=%s\n"
+                 , x$p, x$method, x$time["user.self"], x$c1$overall["Accuracy"], x$c2$overall["Accuracy"]
+                 , 0+x$pp, x$trainControl$method, x$trainControl$number, x$predictors)
+}
+
+
+TrainAndTest <- function( p, method="rf", pp=FALSE, predictors="num_window", trainControl=NULL ) {
+    set.seed(20151222)
+    t0 <- proc.time();
+    classeCol = which(colnames(trainCooked)=="classe")
+    inTrain <- createDataPartition(trainCooked$classe, p=p, list=FALSE )
+    train1 <<- trainCooked[inTrain,]
+    test1 <<- testCooked
+    test2 <<- trainCooked[-inTrain,]
+    
+    if( pp ) {
+        preProc = preProcess( train1, methods=c("center","scale"))
+        train1 <<- predict(preProc,train1)
+        test1 <<- predict(preProc,test1)
+        test2 <<- predict(preProc,test2)
+    }
+    
+    if( class(predictors) == "integer" ||  class(predictors) == "numeric") {
+        predictors = colnames(train1)[predictors]
+    }
+    if( length(predictors) == 1 && predictors == ".") {
+        formula = "."    
+    } else {
+        predictors <- paste0( predictors, "+", collapse="" )
+        predictors <- substr(predictors,1,nchar(predictors)-1)
+    }
+    formula <- as.formula(paste0("classe~", predictors))
+    if( is.null(trainControl) ) {
+        trainControl <- trainControl(allowParallel = TRUE, verboseIter=FALSE)
+    }
+    fit1 <- train( formula, method=method, data=train1 )
+    predict1 <- predict(fit1, testCooked)
+    confusion1 <- confusionMatrix(predict1, answers)
+    predict2 <- predict(fit1, test2)
+    confusion2 <- confusionMatrix(predict2, test2$classe)
+    t1 <- proc.time();
+
+    result <<- list( p = p, method=method, time = t1-t0, c1=confusion1, c2=confusion2, pp=pp, trainControl=trainControl, predictors=predictors)
+    write( printIt(result), "results.txt", append=TRUE)
+    printIt( result )
+    answer <<- predict1
+    #print(answer)
+    write( paste(answer, sep=" "), "results.txt", append=TRUE)
+}
+```
+
+
+
+## Results
+
+Final Answer: `r finalAnswer`
+
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+#pml_write_files(finalAnswers)
+
+```
+
+
+
+
+#Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+
+
+#Data 
+
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+The training data for this project are available here: 
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
+
+The test data are available here: 
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+#What you should submit
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
+
+1. Your submission should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders :-).
+2. You should also apply your machine learning algorithm to the 20 test cases available in the test data above. Please submit your predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details. 
+
+#Reproducibility 
+
+Due to security concerns with the exchange of R code, your code will not be run during the evaluation by your classmates. Please be sure that if they download the repo, they will be able to view the compiled HTML version of your analysis. 
+
+#Appendix
+Good Columns:
+```{r}
+colnames(trainRaw)[goodColumns] 
+```
+
+Not Good Columns:
+```{r}
+colnames(trainRaw)[!goodColumns]
+```
+
+
+
+```{r setup, echo=FALSE, warning=FALSE}
+#setup
+library(lattice)
+library(ggplot2)
+suppressMessages(library(randomForest))
+library(caret)
+#library(stats)
+#library(grid)
+#library(gridExtra)
+#library(car)
+
+trainFile <- "data/train.csv"
+testFile <- "data/test.csv"
+
+getData<-function() {
+        ##Data files are stored in the "data" directory off of getwd()
+        ##Intermediate forms of the data are kept for inspection and for caching
+    url<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+    if( ! dir.exists("data") ) {
+        dir.create("data")
+    }
+    if( ! file.exists(trainFile) ) {          ##Skip the prep steps if the cooked subset is ready.
+        print("Downloading train file" )
+        download.file(url,trainFile)
+    }
+    url<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+    if( ! file.exists(testFile) ) {          ##Skip the prep steps if the cooked subset is ready.
+        print("Downloading train file" )
+        download.file(url,testFile)
+    }
+}
+
+getTrainData<-function() {
+    read.csv(trainFile, na.strings = c("NA", ""))
+}
+
+getTestData<-function() {
+    read.csv(testFile, na.strings = c("NA", ""))
+}
+
+
+```
