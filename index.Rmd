@@ -10,140 +10,178 @@ output: html_document
 
 ## Executive Summary
 
-The goal of this project is to predict whether a participant performed an exercise in the correctly, or if not, which common flaw was detected.
+The goal of this project is to predict whether a participant performed an exercise correctly, or if not, which common flaw was detected.
 
-The data comes from <http://groupware.les.inf.puc-rio.br/har>. It is kindly provided under the Creative Commons license (CC BY-SA). The original study is from Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. [Qualitative Activity Recognition of Weight Lifting Exercises] <http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201>. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
-
-The data consists of a number of observations from sensors positioned on the participants, and a classe variable describing the quality of the exercise, either correct (A) or one of four common flaws (B,C,D,E).
+The data comes from <http://groupware.les.inf.puc-rio.br/har>. It is kindly provided under the Creative Commons license (CC BY-SA). The original study is from Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. [Qualitative Activity Recognition of Weight Lifting Exercises](http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201). Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
 
 For the course project, the data has been split into separate training and test sets at <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv> and <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>. The classe column has been removed from the testing set. We are to build a model from the training set data and use it to predict the missing column in the test set.
 
 
 ## Exploratory Data Analysis
 
-Load the data.
+First load the data. The function to load the data can be found in the appendix.
 
 ```{r}
 trainRaw <- getTrainData()
 testRaw <- getTestData()
 ```
 
-The dataset consists of two types of rows, time snapshots rows, and summary rows. The details can be found in the above referenced paper. The key take-away is that the different rows should not be mixed in our analysis. The different row types can be distinguished with the "new_window" variable. Fortunately, our test test set consists only of snapshot type rows. So we are going to discard the summary rows in the training dataset.
+The data consists of a number of observations from four sensors positioned on the participants, and a classe variable describing the quality of the exercise. The exercise chosen for the study is the Unilateral Dumbbell Biceps Curl. Each repetition by the study participants was classified as
+
+- A. Correct
+- B. Throwing elbows to the front
+- C. Lifting the dumbbell only halfway
+- D. Lowering the dumbbell only halfway
+- E. Throwing the hips to the front.
+
+Each sensor provides three-axis data for each of gyros, accel, magnet (nine readings total). The dataset also contains four Euler angle values derived from the nine axis readings.
+
+The dataset consists of two types of rows, time snapshots rows, and summary rows. The snapshot rows have the above values for a sliding window during the exercise. The summary rows have summary data (mean, variance, min, max, etc.) for a single repetition of the exercise. The details can be found in the above referenced paper. The key take-away is that the different rows should not be mixed in our analysis. The different row types can be distinguished with the "new_window" variable. 
+
+While it would seem better to focus on the summary data as the original reserchers did, we are provided a test set that consists only of snapshot type rows. So we are going to discard the summary rows in the training dataset, and only deal with the snapshot type rows.
+
 
 ```{r}
 goodRows <- trainRaw$new_window == "no"
 ```
 
-Many of the columns were used only for the summary rows. These columns have blanks or NA for all the non-summary rows. Let's remove them. There are also few columns at the head of the dataset that are used to describe the sample conditions (time, participant, etc.). Let's remove those as well.
+Many of the columns were used only for the summary rows. These columns have blanks or NA for all the non-summary rows. Let's remove them. There are also few columns at the head of the dataset that are used to describe the sample conditions (time, participant, etc.). Let's remove those as well, and generate cooked versions of the test and train sets.
 
 
 ```{r}
 goodColumns <- colSums(is.na(trainRaw)) == 0
 goodColumns <- goodColumns & ! colnames(trainRaw) %in% c("X", "user_name", "raw_timestamp_part_1", "cvtd_timestamp", "new_window")
-```
-
-
-```{r}
+classeCol = which(colnames(trainRaw)=="classe")
 trainCooked = trainRaw[goodRows,goodColumns]
-testCooked = testRaw[,goodColumns]
+testCooked = testRaw[,goodColumns[-classeCol]]
 ```
 
 The raw training data has `r nrow(trainRaw)` rows and `r ncol(trainRaw)` columns. After cooking, the training data has `r nrow(trainCooked)` rows and `r ncol(trainCooked)` columns. The test data has been reduced to `r ncol(testCooked)` columns.
 
 
-
 ```{r ref.label="trainAndTest", echo=FALSE, warning=FALSE}
 ```
 
-### Model 1
 
-```{r warning=FALSE, cache=TRUE}
-TrainAndTest(0.01)
-finalAnswer <- answer
-result <- result
+I experimented with several models. The appendix has a function TrainAndTest that handles the repetitive steps in the experimentation. The TrainAndTest function generates a training set of the specified size, optionally does center and scale pre-processing, then runs the train function with a specified method, predictors and train control. It then generates a confusion matrix using the test set held out from the training sets, and an answer vector using the Coursera provided test set.
 
+Each data row has the raw xyz axis readings as well as computed Euler angle values. It proved interesting to invesitgate models with all of the variables, or with just the axis or angle values separately.
+
+```{r}
+xyzVars = c(7:15, 20:28, 33:41, 46:54)
+eulerVars = setdiff( c(1:54), xyzVars )
 ```
 
+As one would expect, the size of the training set and the number of predictors strongly influence how long the training function runs. Obviously, the ability to make good prediction is the primary goal. Beyond that, speed is also a consideration for the final model.
 
-`r printIt(result)`
+### Final Model
 
-`r finalAnswer`
+```{r warning=FALSE, cache=TRUE}
+trainControl <- trainControl(method="cv", number=5)
+TrainAndTest(0.5, method="gbm", predictors=eulerVars, trainControl=trainControl)
+finalAnswer <- answer
+```
 
-yo! `r 1+1` `r result$confusion2`
+For the final model I choose the **`r result$method`** method with the formula "classe ~ `r result$predictors`". 
+
+Train control was set to `r result$trainControl$number`-fold cross validation. **`r sprintf( "%2.0f", 100.0*result$p )`%** of the data was used for training. 
+
+The result is **`r sprintf( "%1.4f", result$confusion$overall["Accuracy"])`** accuracy with and expected out of sample error of **`r sprintf( "%1.4f", 1.0-result$confusion$overall["Accuracy"])`**.
+
+The training ran in `r result$time["user.self"]` seconds.
+
+The full confusion matrix:
+
+```{r echo=FALSE}
+result$confusion
+#confusion
+```
+
+## Results
+
+Final Answer: `r finalAnswer`
 
 
-#HACK
+#Appendix
+Good Columns (full list of columns retained during the data cleaning phase):
+```{r}
+colnames(trainRaw)[goodColumns] 
+```
+
+Not Good Columns (full list of columns discarded during the data cleaning phase):
+```{r}
+colnames(trainRaw)[!goodColumns]
+```
+
 
 ```{r}
 
 ```
 
-
+The TrainAndTest function:
 
 ```{r trainAndTest }
-checkAnswer <- function(n) {
-    trainRaw[trainRaw$num_window==n,"classe"][1]
-}
-answers <- sapply(testCooked[,"num_window"],FUN=checkAnswer)
-
 printIt <- function( x = result ) {
-    sprintf( "p=%0.2f, m=%5s, time=%3.0fs, acc1=%0.2f, acc2=%0.2f, pp=%i, tc=%s-%i, predictors=%s\n"
-                 , x$p, x$method, x$time["user.self"], x$c1$overall["Accuracy"], x$c2$overall["Accuracy"]
+    sprintf( "p=%0.2f, m=%5s, time=%3.0fs, acc=%0.2f, pp=%i, tc=%s-%i, predictors=%s\n"
+                 , x$p, x$method, x$time["user.self"], x$confusion["Accuracy"]
                  , 0+x$pp, x$trainControl$method, x$trainControl$number, x$predictors)
 }
 
 
 TrainAndTest <- function( p, method="rf", pp=FALSE, predictors="num_window", trainControl=NULL ) {
-    set.seed(20151222)
-    t0 <- proc.time();
-    classeCol = which(colnames(trainCooked)=="classe")
+    set.seed(20151222)  #Set random seed to ensure consistent results.
+    t0 <- proc.time();  #start timing the operation.
+        #Create training and test sets. The input p determines the size of the training set.        
     inTrain <- createDataPartition(trainCooked$classe, p=p, list=FALSE )
-    train1 <<- trainCooked[inTrain,]
-    test1 <<- testCooked
-    test2 <<- trainCooked[-inTrain,]
-    
+    train1 <- trainCooked[inTrain,]
+    test1 <- testCooked
+    test2 <- trainCooked[-inTrain,]
+        #Preprocess the data if requested by the pp input value
     if( pp ) {
         preProc = preProcess( train1, methods=c("center","scale"))
         train1 <<- predict(preProc,train1)
         test1 <<- predict(preProc,test1)
         test2 <<- predict(preProc,test2)
     }
-    
+        #Build up a formula of the form "class ~ predictors"
     if( class(predictors) == "integer" ||  class(predictors) == "numeric") {
         predictors = colnames(train1)[predictors]
     }
     if( length(predictors) == 1 && predictors == ".") {
-        formula = "."    
+        #Nothing happens here. Use the dot as-is
     } else {
-        predictors <- paste0( predictors, "+", collapse="" )
-        predictors <- substr(predictors,1,nchar(predictors)-1)
+        predictors <- paste0( predictors, " + ", collapse="" )
+        predictors <- substr(predictors,1,nchar(predictors)-3)
     }
     formula <- as.formula(paste0("classe~", predictors))
-    if( is.null(trainControl) ) {
+    if( is.null(trainControl) ) {   #provide a default trainControl if not specified in the input.
         trainControl <- trainControl(allowParallel = TRUE, verboseIter=FALSE)
     }
-    fit1 <- train( formula, method=method, data=train1 )
+        #gbm is very noisy and need verbose=FALSE. Some other methods choke with this setting.
+    if( method == "gbm" ) {
+        fit1 <- train( formula, method=method, data=train1, trControl = trainControl, verbose=FALSE )
+    } else {
+        fit1 <- train( formula, method=method, data=train1, trControl = trainControl )
+    }
+        #Generate predicted result for the final test 
     predict1 <- predict(fit1, testCooked)
-    confusion1 <- confusionMatrix(predict1, answers)
-    predict2 <- predict(fit1, test2)
-    confusion2 <- confusionMatrix(predict2, test2$classe)
+        #Test model against the test set, and generate the confusion matrix.        
+    predict <- predict(fit1, test2)
+    confusion <- confusionMatrix(predict, test2$classe)
     t1 <- proc.time();
-
-    result <<- list( p = p, method=method, time = t1-t0, c1=confusion1, c2=confusion2, pp=pp, trainControl=trainControl, predictors=predictors)
-    write( printIt(result), "results.txt", append=TRUE)
-    printIt( result )
+        #Collect information about this run and put it in the global result variable.
+    result <<- list( p = p, method=method, time = t1-t0, confusion=confusion, pp=pp, trainControl=trainControl, predictors=predictors)
+        #also populate the answer vector in case this run is selected as the final model
     answer <<- predict1
+    #write( printIt(result), "results.txt", append=TRUE)
+    #printIt( result )
     #print(answer)
-    write( paste(answer, sep=" "), "results.txt", append=TRUE)
+    #write( paste(answer, sep=" "), "results.txt", append=TRUE)
 }
 ```
 
 
-
-## Results
-
-Final Answer: `r finalAnswer`
-
+Function to create separate files to submit for assigment.
 
 ```{r}
 pml_write_files = function(x){
@@ -159,70 +197,22 @@ pml_write_files = function(x){
 ```
 
 
+The setup up chunk. This loads the caret library and the libraries needed by caret. Data files are downloaded from the internet and stored on the local hard drive. The getData functions load those files into memory.
 
-
-#Background
-
-Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
-
-
-
-#Data 
-
-
-The training data for this project are available here: 
-
-https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
-
-The test data are available here: 
-
-https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
-
-
-The training data for this project are available here: 
-
-<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
-
-The test data are available here: 
-
-<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
-
-The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
-
-#What you should submit
-
-The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
-
-1. Your submission should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders :-).
-2. You should also apply your machine learning algorithm to the 20 test cases available in the test data above. Please submit your predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details. 
-
-#Reproducibility 
-
-Due to security concerns with the exchange of R code, your code will not be run during the evaluation by your classmates. Please be sure that if they download the repo, they will be able to view the compiled HTML version of your analysis. 
-
-#Appendix
-Good Columns:
-```{r}
-colnames(trainRaw)[goodColumns] 
-```
-
-Not Good Columns:
-```{r}
-colnames(trainRaw)[!goodColumns]
-```
-
-
-
-```{r setup, echo=FALSE, warning=FALSE}
+```{r setup}
 #setup
+library(parallel)
+library(survival)
+library(splines)
+library(plyr)
 library(lattice)
 library(ggplot2)
+suppressMessages(library(gbm))
 suppressMessages(library(randomForest))
-library(caret)
+suppressMessages(library(caret))
 #library(stats)
 #library(grid)
 #library(gridExtra)
-#library(car)
 
 trainFile <- "data/train.csv"
 testFile <- "data/test.csv"
@@ -255,3 +245,4 @@ getTestData<-function() {
 
 
 ```
+

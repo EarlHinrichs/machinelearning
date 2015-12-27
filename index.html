@@ -70,136 +70,89 @@ img {
 
 <div id="executive-summary" class="section level2">
 <h2>Executive Summary</h2>
-<p>The goal of this project is to predict whether a participant performed an exercise in the correctly, or if not, which common flaw was detected.</p>
-<p>The data comes from <a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a>. It is kindly provided under the Creative Commons license (CC BY-SA). The original study is from Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. [Qualitative Activity Recognition of Weight Lifting Exercises] <a href="http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201" class="uri">http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201</a>. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human ’13) . Stuttgart, Germany: ACM SIGCHI, 2013.</p>
-<p>The data consists of a number of observations from sensors positioned on the participants, and a classe variable describing the quality of the exercise, either correct (A) or one of four common flaws (B,C,D,E).</p>
+<p>The goal of this project is to predict whether a participant performed an exercise correctly, or if not, which common flaw was detected.</p>
+<p>The data comes from <a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a>. It is kindly provided under the Creative Commons license (CC BY-SA). The original study is from Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. <a href="http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201">Qualitative Activity Recognition of Weight Lifting Exercises</a>. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human ’13) . Stuttgart, Germany: ACM SIGCHI, 2013.</p>
 <p>For the course project, the data has been split into separate training and test sets at <a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv</a> and <a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv</a>. The classe column has been removed from the testing set. We are to build a model from the training set data and use it to predict the missing column in the test set.</p>
 </div>
 <div id="exploratory-data-analysis" class="section level2">
 <h2>Exploratory Data Analysis</h2>
-<p>Load the data.</p>
+<p>First load the data. The function to load the data can be found in the appendix.</p>
 <pre class="r"><code>trainRaw &lt;- getTrainData()
 testRaw &lt;- getTestData()</code></pre>
-<p>The dataset consists of two types of rows, time snapshots rows, and summary rows. The details can be found in the above referenced paper. The key take-away is that the different rows should not be mixed in our analysis. The different row types can be distinguished with the “new_window” variable. Fortunately, our test test set consists only of snapshot type rows. So we are going to discard the summary rows in the training dataset.</p>
+<p>The data consists of a number of observations from four sensors positioned on the participants, and a classe variable describing the quality of the exercise. The exercise chosen for the study is the Unilateral Dumbbell Biceps Curl. Each repetition by the study participants was classified as</p>
+<ul>
+<li>A. Correct</li>
+<li>B. Throwing elbows to the front</li>
+<li>C. Lifting the dumbbell only halfway</li>
+<li>D. Lowering the dumbbell only halfway</li>
+<li>E. Throwing the hips to the front.</li>
+</ul>
+<p>Each sensor provides three-axis data for each of gyros, accel, magnet (nine readings total). The dataset also contains four Euler angle values derived from the nine axis readings.</p>
+<p>The dataset consists of two types of rows, time snapshots rows, and summary rows. The snapshot rows have the above values for a sliding window during the exercise. The summary rows have summary data (mean, variance, min, max, etc.) for a single repetition of the exercise. The details can be found in the above referenced paper. The key take-away is that the different rows should not be mixed in our analysis. The different row types can be distinguished with the “new_window” variable.</p>
+<p>While it would seem better to focus on the summary data as the original reserchers did, we are provided a test set that consists only of snapshot type rows. So we are going to discard the summary rows in the training dataset, and only deal with the snapshot type rows.</p>
 <pre class="r"><code>goodRows &lt;- trainRaw$new_window == &quot;no&quot;</code></pre>
-<p>Many of the columns were used only for the summary rows. These columns have blanks or NA for all the non-summary rows. Let’s remove them. There are also few columns at the head of the dataset that are used to describe the sample conditions (time, participant, etc.). Let’s remove those as well.</p>
+<p>Many of the columns were used only for the summary rows. These columns have blanks or NA for all the non-summary rows. Let’s remove them. There are also few columns at the head of the dataset that are used to describe the sample conditions (time, participant, etc.). Let’s remove those as well, and generate cooked versions of the test and train sets.</p>
 <pre class="r"><code>goodColumns &lt;- colSums(is.na(trainRaw)) == 0
-goodColumns &lt;- goodColumns &amp; ! colnames(trainRaw) %in% c(&quot;X&quot;, &quot;user_name&quot;, &quot;raw_timestamp_part_1&quot;, &quot;cvtd_timestamp&quot;, &quot;new_window&quot;)</code></pre>
-<pre class="r"><code>trainCooked = trainRaw[goodRows,goodColumns]
-testCooked = testRaw[,goodColumns]</code></pre>
-<p>The raw training data has 19622 rows and 160 columns. After cooking, the training data has 19216 rows and 55 columns. The test data has been reduced to 55 columns.</p>
-<div id="model-1" class="section level3">
-<h3>Model 1</h3>
-<pre class="r"><code>TrainAndTest(0.01)
-finalAnswer &lt;- answer
-result &lt;- result</code></pre>
-<p>p=0.01, m= rf, time= 2s, acc1=0.95, acc2=0.89, pp=0, tc=boot-25, predictors=num_window</p>
-<p>B, A, B, A, A, E, D, B, A, A, B, C, B, A, A, E, A, B, B, B</p>
-<p>yo! 2</p>
+goodColumns &lt;- goodColumns &amp; ! colnames(trainRaw) %in% c(&quot;X&quot;, &quot;user_name&quot;, &quot;raw_timestamp_part_1&quot;, &quot;cvtd_timestamp&quot;, &quot;new_window&quot;)
+classeCol = which(colnames(trainRaw)==&quot;classe&quot;)
+trainCooked = trainRaw[goodRows,goodColumns]
+testCooked = testRaw[,goodColumns[-classeCol]]</code></pre>
+<p>The raw training data has 19622 rows and 160 columns. After cooking, the training data has 19216 rows and 55 columns. The test data has been reduced to 54 columns.</p>
+<p>I experimented with several models. The appendix has a function TrainAndTest that handles the repetitive steps in the experimentation. The TrainAndTest function generates a training set of the specified size, optionally does center and scale pre-processing, then runs the train function with a specified method, predictors and train control. It then generates a confusion matrix using the test set held out from the training sets, and an answer vector using the Coursera provided test set.</p>
+<p>Each data row has the raw xyz axis readings as well as computed Euler angle values. It proved interesting to invesitgate models with all of the variables, or with just the axis or angle values separately.</p>
+<pre class="r"><code>xyzVars = c(7:15, 20:28, 33:41, 46:54)
+eulerVars = setdiff( c(1:54), xyzVars )</code></pre>
+<p>As one would expect, the size of the training set and the number of predictors strongly influence how long the training function runs. Obviously, the ability to make good prediction is the primary goal. Beyond that, speed is also a consideration for the final model.</p>
+<div id="final-model" class="section level3">
+<h3>Final Model</h3>
+<pre class="r"><code>trainControl &lt;- trainControl(method=&quot;cv&quot;, number=5)
+TrainAndTest(0.5, method=&quot;gbm&quot;, predictors=eulerVars, trainControl=trainControl)
+finalAnswer &lt;- answer</code></pre>
+<p>For the final model I choose the <strong>gbm</strong> method with the formula “classe ~ raw_timestamp_part_2 + num_window + roll_belt + pitch_belt + yaw_belt + total_accel_belt + roll_arm + pitch_arm + yaw_arm + total_accel_arm + roll_dumbbell + pitch_dumbbell + yaw_dumbbell + total_accel_dumbbell + roll_forearm + pitch_forearm + yaw_forearm + total_accel_forearm”.</p>
+<p>Train control was set to 5-fold cross validation. <strong>50%</strong> of the data was used for training.</p>
+<p>The result is <strong>0.9900</strong> accuracy with and expected out of sample error of <strong>0.0100</strong>.</p>
+<p>The training ran in 84.54 seconds.</p>
+<p>The full confusion matrix:</p>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 2725   13    0    2    0
+##          B    5 1831    9    4    2
+##          C    1   13 1660   16    0
+##          D    4    2    7 1547   14
+##          E    0    0    0    4 1748
+## 
+## Overall Statistics
+##                                           
+##                Accuracy : 0.99            
+##                  95% CI : (0.9878, 0.9919)
+##     No Information Rate : 0.2847          
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                                           
+##                   Kappa : 0.9874          
+##  Mcnemar's Test P-Value : NA              
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9963   0.9849   0.9905   0.9835   0.9909
+## Specificity            0.9978   0.9974   0.9962   0.9966   0.9995
+## Pos Pred Value         0.9945   0.9892   0.9822   0.9828   0.9977
+## Neg Pred Value         0.9985   0.9964   0.9980   0.9968   0.9980
+## Prevalence             0.2847   0.1935   0.1745   0.1637   0.1836
+## Detection Rate         0.2836   0.1906   0.1728   0.1610   0.1820
+## Detection Prevalence   0.2852   0.1927   0.1759   0.1638   0.1824
+## Balanced Accuracy      0.9971   0.9912   0.9933   0.9901   0.9952</code></pre>
 </div>
 </div>
-<div id="hack" class="section level1">
-<h1>HACK</h1>
-<pre class="r"><code>checkAnswer &lt;- function(n) {
-    trainRaw[trainRaw$num_window==n,&quot;classe&quot;][1]
-}
-answers &lt;- sapply(testCooked[,&quot;num_window&quot;],FUN=checkAnswer)
-
-printIt &lt;- function( x = result ) {
-    sprintf( &quot;p=%0.2f, m=%5s, time=%3.0fs, acc1=%0.2f, acc2=%0.2f, pp=%i, tc=%s-%i, predictors=%s\n&quot;
-                 , x$p, x$method, x$time[&quot;user.self&quot;], x$c1$overall[&quot;Accuracy&quot;], x$c2$overall[&quot;Accuracy&quot;]
-                 , 0+x$pp, x$trainControl$method, x$trainControl$number, x$predictors)
-}
-
-
-TrainAndTest &lt;- function( p, method=&quot;rf&quot;, pp=FALSE, predictors=&quot;num_window&quot;, trainControl=NULL ) {
-    set.seed(20151222)
-    t0 &lt;- proc.time();
-    classeCol = which(colnames(trainCooked)==&quot;classe&quot;)
-    inTrain &lt;- createDataPartition(trainCooked$classe, p=p, list=FALSE )
-    train1 &lt;&lt;- trainCooked[inTrain,]
-    test1 &lt;&lt;- testCooked
-    test2 &lt;&lt;- trainCooked[-inTrain,]
-    
-    if( pp ) {
-        preProc = preProcess( train1, methods=c(&quot;center&quot;,&quot;scale&quot;))
-        train1 &lt;&lt;- predict(preProc,train1)
-        test1 &lt;&lt;- predict(preProc,test1)
-        test2 &lt;&lt;- predict(preProc,test2)
-    }
-    
-    if( class(predictors) == &quot;integer&quot; ||  class(predictors) == &quot;numeric&quot;) {
-        predictors = colnames(train1)[predictors]
-    }
-    if( length(predictors) == 1 &amp;&amp; predictors == &quot;.&quot;) {
-        formula = &quot;.&quot;    
-    } else {
-        predictors &lt;- paste0( predictors, &quot;+&quot;, collapse=&quot;&quot; )
-        predictors &lt;- substr(predictors,1,nchar(predictors)-1)
-    }
-    formula &lt;- as.formula(paste0(&quot;classe~&quot;, predictors))
-    if( is.null(trainControl) ) {
-        trainControl &lt;- trainControl(allowParallel = TRUE, verboseIter=FALSE)
-    }
-    fit1 &lt;- train( formula, method=method, data=train1 )
-    predict1 &lt;- predict(fit1, testCooked)
-    confusion1 &lt;- confusionMatrix(predict1, answers)
-    predict2 &lt;- predict(fit1, test2)
-    confusion2 &lt;- confusionMatrix(predict2, test2$classe)
-    t1 &lt;- proc.time();
-
-    result &lt;&lt;- list( p = p, method=method, time = t1-t0, c1=confusion1, c2=confusion2, pp=pp, trainControl=trainControl, predictors=predictors)
-    write( printIt(result), &quot;results.txt&quot;, append=TRUE)
-    printIt( result )
-    answer &lt;&lt;- predict1
-    #print(answer)
-    write( paste(answer, sep=&quot; &quot;), &quot;results.txt&quot;, append=TRUE)
-}</code></pre>
 <div id="results" class="section level2">
 <h2>Results</h2>
-<p>Final Answer: B, A, B, A, A, E, D, B, A, A, B, C, B, A, A, E, A, B, B, B</p>
-<pre class="r"><code>pml_write_files = function(x){
-  n = length(x)
-  for(i in 1:n){
-    filename = paste0(&quot;problem_id_&quot;,i,&quot;.txt&quot;)
-    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
-  }
-}
-
-#pml_write_files(finalAnswers)</code></pre>
-</div>
-</div>
-<div id="background" class="section level1">
-<h1>Background</h1>
-<p>Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a> (see the section on the Weight Lifting Exercise Dataset).</p>
-</div>
-<div id="data" class="section level1">
-<h1>Data</h1>
-<p>The training data for this project are available here:</p>
-<p><a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv</a></p>
-<p>The test data are available here:</p>
-<p><a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv</a></p>
-<p>The training data for this project are available here:</p>
-<p><a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv</a></p>
-<p>The test data are available here:</p>
-<p><a href="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv" class="uri">https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv</a></p>
-<p>The data for this project come from this source: <a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a>. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.</p>
-</div>
-<div id="what-you-should-submit" class="section level1">
-<h1>What you should submit</h1>
-<p>The goal of your project is to predict the manner in which they did the exercise. This is the “classe” variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.</p>
-<ol style="list-style-type: decimal">
-<li>Your submission should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to &lt; 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders :-).</li>
-<li>You should also apply your machine learning algorithm to the 20 test cases available in the test data above. Please submit your predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details.</li>
-</ol>
-</div>
-<div id="reproducibility" class="section level1">
-<h1>Reproducibility</h1>
-<p>Due to security concerns with the exchange of R code, your code will not be run during the evaluation by your classmates. Please be sure that if they download the repo, they will be able to view the compiled HTML version of your analysis.</p>
+<p>Final Answer: B, A, B, A, A, E, D, B, A, A, B, C, B, A, E, E, A, B, B, B</p>
 </div>
 <div id="appendix" class="section level1">
 <h1>Appendix</h1>
-<p>Good Columns:</p>
+<p>Good Columns (full list of columns retained during the data cleaning phase):</p>
 <pre class="r"><code>colnames(trainRaw)[goodColumns] </code></pre>
 <pre><code>##  [1] &quot;raw_timestamp_part_2&quot; &quot;num_window&quot;           &quot;roll_belt&quot;           
 ##  [4] &quot;pitch_belt&quot;           &quot;yaw_belt&quot;             &quot;total_accel_belt&quot;    
@@ -220,7 +173,7 @@ TrainAndTest &lt;- function( p, method=&quot;rf&quot;, pp=FALSE, predictors=&quo
 ## [49] &quot;accel_forearm_x&quot;      &quot;accel_forearm_y&quot;      &quot;accel_forearm_z&quot;     
 ## [52] &quot;magnet_forearm_x&quot;     &quot;magnet_forearm_y&quot;     &quot;magnet_forearm_z&quot;    
 ## [55] &quot;classe&quot;</code></pre>
-<p>Not Good Columns:</p>
+<p>Not Good Columns (full list of columns discarded during the data cleaning phase):</p>
 <pre class="r"><code>colnames(trainRaw)[!goodColumns]</code></pre>
 <pre><code>##   [1] &quot;X&quot;                        &quot;user_name&quot;               
 ##   [3] &quot;raw_timestamp_part_1&quot;     &quot;cvtd_timestamp&quot;          
@@ -275,6 +228,117 @@ TrainAndTest &lt;- function( p, method=&quot;rf&quot;, pp=FALSE, predictors=&quo
 ## [101] &quot;stddev_pitch_forearm&quot;     &quot;var_pitch_forearm&quot;       
 ## [103] &quot;avg_yaw_forearm&quot;          &quot;stddev_yaw_forearm&quot;      
 ## [105] &quot;var_yaw_forearm&quot;</code></pre>
+<p>The TrainAndTest function:</p>
+<pre class="r"><code>printIt &lt;- function( x = result ) {
+    sprintf( &quot;p=%0.2f, m=%5s, time=%3.0fs, acc=%0.2f, pp=%i, tc=%s-%i, predictors=%s\n&quot;
+                 , x$p, x$method, x$time[&quot;user.self&quot;], x$confusion[&quot;Accuracy&quot;]
+                 , 0+x$pp, x$trainControl$method, x$trainControl$number, x$predictors)
+}
+
+
+TrainAndTest &lt;- function( p, method=&quot;rf&quot;, pp=FALSE, predictors=&quot;num_window&quot;, trainControl=NULL ) {
+    set.seed(20151222)  #Set random seed to ensure consistent results.
+    t0 &lt;- proc.time();  #start timing the operation.
+        #Create training and test sets. The input p determines the size of the training set.        
+    inTrain &lt;- createDataPartition(trainCooked$classe, p=p, list=FALSE )
+    train1 &lt;- trainCooked[inTrain,]
+    test1 &lt;- testCooked
+    test2 &lt;- trainCooked[-inTrain,]
+        #Preprocess the data if requested by the pp input value
+    if( pp ) {
+        preProc = preProcess( train1, methods=c(&quot;center&quot;,&quot;scale&quot;))
+        train1 &lt;&lt;- predict(preProc,train1)
+        test1 &lt;&lt;- predict(preProc,test1)
+        test2 &lt;&lt;- predict(preProc,test2)
+    }
+        #Build up a formula of the form &quot;class ~ predictors&quot;
+    if( class(predictors) == &quot;integer&quot; ||  class(predictors) == &quot;numeric&quot;) {
+        predictors = colnames(train1)[predictors]
+    }
+    if( length(predictors) == 1 &amp;&amp; predictors == &quot;.&quot;) {
+        #Nothing happens here. Use the dot as-is
+    } else {
+        predictors &lt;- paste0( predictors, &quot; + &quot;, collapse=&quot;&quot; )
+        predictors &lt;- substr(predictors,1,nchar(predictors)-3)
+    }
+    formula &lt;- as.formula(paste0(&quot;classe~&quot;, predictors))
+    if( is.null(trainControl) ) {   #provide a default trainControl if not specified in the input.
+        trainControl &lt;- trainControl(allowParallel = TRUE, verboseIter=FALSE)
+    }
+        #gbm is very noisy and need verbose=FALSE. Some other methods choke with this setting.
+    if( method == &quot;gbm&quot; ) {
+        fit1 &lt;- train( formula, method=method, data=train1, trControl = trainControl, verbose=FALSE )
+    } else {
+        fit1 &lt;- train( formula, method=method, data=train1, trControl = trainControl )
+    }
+        #Generate predicted result for the final test 
+    predict1 &lt;- predict(fit1, testCooked)
+        #Test model against the test set, and generate the confusion matrix.        
+    predict &lt;- predict(fit1, test2)
+    confusion &lt;- confusionMatrix(predict, test2$classe)
+    t1 &lt;- proc.time();
+        #Collect information about this run and put it in the global result variable.
+    result &lt;&lt;- list( p = p, method=method, time = t1-t0, confusion=confusion, pp=pp, trainControl=trainControl, predictors=predictors)
+        #also populate the answer vector in case this run is selected as the final model
+    answer &lt;&lt;- predict1
+    #write( printIt(result), &quot;results.txt&quot;, append=TRUE)
+    #printIt( result )
+    #print(answer)
+    #write( paste(answer, sep=&quot; &quot;), &quot;results.txt&quot;, append=TRUE)
+}</code></pre>
+<p>Function to create separate files to submit for assigment.</p>
+<pre class="r"><code>pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0(&quot;problem_id_&quot;,i,&quot;.txt&quot;)
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+#pml_write_files(finalAnswers)</code></pre>
+<p>The setup up chunk. This loads the caret library and the libraries needed by caret. Data files are downloaded from the internet and stored on the local hard drive. The getData functions load those files into memory.</p>
+<pre class="r"><code>#setup
+library(parallel)
+library(survival)
+library(splines)
+library(plyr)
+library(lattice)
+library(ggplot2)
+suppressMessages(library(gbm))
+suppressMessages(library(randomForest))
+suppressMessages(library(caret))
+#library(stats)
+#library(grid)
+#library(gridExtra)
+
+trainFile &lt;- &quot;data/train.csv&quot;
+testFile &lt;- &quot;data/test.csv&quot;
+
+getData&lt;-function() {
+        ##Data files are stored in the &quot;data&quot; directory off of getwd()
+        ##Intermediate forms of the data are kept for inspection and for caching
+    url&lt;-&quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv&quot;
+    if( ! dir.exists(&quot;data&quot;) ) {
+        dir.create(&quot;data&quot;)
+    }
+    if( ! file.exists(trainFile) ) {          ##Skip the prep steps if the cooked subset is ready.
+        print(&quot;Downloading train file&quot; )
+        download.file(url,trainFile)
+    }
+    url&lt;-&quot;https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv&quot;
+    if( ! file.exists(testFile) ) {          ##Skip the prep steps if the cooked subset is ready.
+        print(&quot;Downloading train file&quot; )
+        download.file(url,testFile)
+    }
+}
+
+getTrainData&lt;-function() {
+    read.csv(trainFile, na.strings = c(&quot;NA&quot;, &quot;&quot;))
+}
+
+getTestData&lt;-function() {
+    read.csv(testFile, na.strings = c(&quot;NA&quot;, &quot;&quot;))
+}</code></pre>
 </div>
 
 
