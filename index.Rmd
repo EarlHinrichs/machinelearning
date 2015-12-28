@@ -246,3 +246,89 @@ getTestData<-function() {
 
 ```
 
+
+## Experimenting with models.
+
+The main report only talks about the final model. However getting to the final model was fun. Here are some highlights of the journey. There is nothing in this section that is necessary for the assignment. Feel free to
+skip it. 
+
+The following is output from a function very similar to the TrainAndTest function posted above. Sorry, I do not have
+the time to put this up in true Rmd fashion, running the code in-line. This is cut and paste from logs that
+were generated while I was experimenting. I am showing it as r comments, as that is the only way I know to get
+monospaced fonts.
+
+I started with five methods, gbm, rf, lda, rpart, and treebag. First I wanted to get a sense of training time. I started with a very small training set, the increased the size and noted an approximately linear increase in
+time. Also, as expected accuracy improved with the larger training set. lda and rpart are the fasted, but the
+accuracy was poor. The other three were similar in speed and accuracy.
+
+
+```{r}
+#p=0.01, m=  gbm, time=  3s, acc=0.74, pp=0, tc=cv-2, ans=CACAAEDBAABCBABAEEBB predictors=.
+#p=0.01, m=   rf, time=  3s, acc=0.72, pp=0, tc=cv-2, ans=CACAAEDBAACCBABAAAAB predictors=.
+#p=0.01, m=  lda, time=  1s, acc=0.63, pp=0, tc=cv-2, ans=EABCAEDDAADABABAAEAB predictors=.
+#p=0.01, m=rpart, time=  1s, acc=0.43, pp=0, tc=cv-2, ans=CACAACCAAACCCACAAAAC predictors=.
+#p=0.01, m=treebag, time=  4s, acc=0.69, pp=0, tc=cv-2, ans=DACAACDBAAACBABAEAAB predictors=.
+
+#p=0.04, m=  gbm, time=  6s, acc=0.90, pp=0, tc=cv-2, ans=CABAAEDBAAACBAEEABAB predictors=.
+#p=0.04, m=   rf, time=  9s, acc=0.90, pp=0, tc=cv-2, ans=CABAAEDDAACCBAEEADBB predictors=.
+#p=0.04, m=  lda, time=  1s, acc=0.68, pp=0, tc=cv-2, ans=CABAACDDAADAEABAADBB predictors=.
+#p=0.04, m=rpart, time=  1s, acc=0.54, pp=0, tc=cv-2, ans=CAEAAEDAAAEEEAEAAAAE predictors=.
+#p=0.04, m=treebag, time=  8s, acc=0.89, pp=0, tc=cv-2, ans=CABAAEDDAACCBAEEAABB predictors=.
+
+#p=0.10, m=  gbm, time= 14s, acc=0.95, pp=0, tc=cv-2, ans=CABAAEDBAABCBAEEABBB predictors=.
+#p=0.10, m=   rf, time= 20s, acc=0.96, pp=0, tc=cv-2, ans=BABAAEDDAABCBAEEAABB predictors=.
+#p=0.10, m=  lda, time=  1s, acc=0.70, pp=0, tc=cv-2, ans=BABCACDDAADABABAABBB predictors=.
+#p=0.10, m=rpart, time=  2s, acc=0.54, pp=0, tc=cv-2, ans=ACCAACCCAACCCACCAAAC predictors=.
+#p=0.10, m=treebag, time= 18s, acc=0.95, pp=0, tc=cv-2, ans=BABAABDDAABCBAEEABBB predictors=.
+```
+
+Next I wanted to trim the predictor list. As I mentioned in the body of the report, the axis data
+and the angle data are related, the angle data is a transformation of the axis data. So I wanted
+to try the two sets separately. Everything was faster, about half the time using half the variables.
+Accuracy for just the Euler variable was slightly better than for the models using all of the
+variables. Faster and more accurate made it an easy choice going forward.
+
+```{r}
+#p=0.10, m=  gbm, time= 10s, acc=0.87, pp=0, tc=cv-2, ans=CABAABDBAAACBAEEABBB predictors=xyz
+#p=0.10, m=   rf, time= 15s, acc=0.91, pp=0, tc=cv-2, ans=BABAAEDBAAACBAEEABBB predictors=xyz
+#p=0.10, m=  lda, time=  1s, acc=0.63, pp=0, tc=cv-2, ans=BABCCCDDAAAABAEACBBB predictors=xyz
+#p=0.10, m=rpart, time=  2s, acc=0.34, pp=0, tc=cv-2, ans=AAAAAAAAAAAAAAAAEAAA predictors=xyz
+#p=0.10, m=treebag, time= 13s, acc=0.88, pp=0, tc=cv-2, ans=BABAABDDAAACBAEEAABB predictors=xyz
+
+#p=0.10, m=  gbm, time=  7s, acc=0.96, pp=0, tc=cv-2, ans=BABAAEDDAABCBAEEABBB predictors=-xyz
+#p=0.10, m=   rf, time=  9s, acc=0.97, pp=0, tc=cv-2, ans=BABAAEDBAABCBAEEABBB predictors=-xyz
+#p=0.10, m=  lda, time=  1s, acc=0.48, pp=0, tc=cv-2, ans=EAAAACCDACDABABBADEB predictors=-xyz
+#p=0.10, m=rpart, time=  1s, acc=0.50, pp=0, tc=cv-2, ans=ACCAACCCACCCBACBACAB predictors=-xyz
+#p=0.10, m=treebag, time=  7s, acc=0.96, pp=0, tc=cv-2, ans=BABAAEDBAABCBAEEABBB predictors=-xyz
+```
+
+Up to this point I was using 2-fold cross validation for speed. I wanted more in the final model,
+so I kicked it up to 5-fold. As expected, build time increased. But the good news was that the 
+accuracy remained high.
+
+```{r}
+#p=0.10, m=  gbm, time= 18s, acc=0.95, pp=0, tc=cv-5, ans=BABAAEDBAABCBAEEABBB predictors=-xyz
+#p=0.10, m=   rf, time= 27s, acc=0.97, pp=0, tc=cv-5, ans=BABAAEDAAABCBAEEABBB predictors=-xyz
+#p=0.10, m=  lda, time=  1s, acc=0.48, pp=0, tc=cv-5, ans=EAAAACCDACDABABBADEB predictors=-xyz
+#p=0.10, m=rpart, time=  2s, acc=0.50, pp=0, tc=cv-5, ans=ACCAACCCACCCBACBACAB predictors=-xyz
+#p=0.10, m=treebag, time= 16s, acc=0.96, pp=0, tc=cv-5, ans=BABAAEDBAABCBAEEABBB predictors=-xyz
+```
+
+I wanted to know what would happen if we just looked at a single sensor. Would that be enough to
+build a model. These were built using only the dumbbell axis variables. Accuracy dropped off, so
+I abandoned this idea.
+
+```{r}
+#p=0.10, m=  gbm, time= 13s, acc=0.74, pp=0, tc=cv-5, ans=CAAAAEDAAAECBABEABAB predictors=33:41
+#p=0.10, m=   rf, time= 19s, acc=0.80, pp=0, tc=cv-5, ans=AABAAEDAAAECBAEEABAB predictors=33:41
+#p=0.10, m=  lda, time=  1s, acc=0.37, pp=0, tc=cv-5, ans=EAACCAAAAAAABAAEEABB predictors=33:41
+#p=0.10, m=rpart, time=  1s, acc=0.36, pp=0, tc=cv-5, ans=AAAAAAAAAAAAAAAAAAAA predictors=33:41
+#p=0.10, m=treebag, time= 10s, acc=0.77, pp=0, tc=cv-5, ans=AABAAEDADAEEBAEEABAB predictors=33:41
+```
+
+Basically gbm, rf, and treebag are very close for both accuracy and speed. I choose gbm for the final model.
+
+
+
+
+
